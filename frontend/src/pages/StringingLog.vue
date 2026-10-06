@@ -7,7 +7,9 @@ import EmptyPanel from '../components/common/EmptyPanel.vue';
 import ToneTextEditor from '../components/common/ToneTextEditor.vue';
 import { useStringingStore } from '../stores/stringingStore';
 import { useBoardStore } from '../stores/boardStore';
+import { useMaterialStore } from '../stores/materialStore';
 import { formatDate } from '../utils/layer';
+import { batchLabelOf, isUnknownBatch } from '../utils/material';
 import {
   NINE_VIRTUES,
   STRING_DEFECTS,
@@ -21,6 +23,9 @@ import {
 const route = useRoute();
 const stringingStore = useStringingStore();
 const boardStore = useBoardStore();
+const materialStore = useMaterialStore();
+
+const stringBatches = computed(() => materialStore.batchesOfType('琴弦'));
 
 const dialogVisible = ref(false);
 const editingId = ref('');
@@ -34,6 +39,7 @@ interface StringingForm {
   defects: StringDefect[];
   strungAt: string;
   operator: string;
+  batchNo: string;
 }
 
 const form = ref<StringingForm>({
@@ -44,6 +50,7 @@ const form = ref<StringingForm>({
   defects: ['无'],
   strungAt: new Date().toISOString().slice(0, 10),
   operator: '周砚秋',
+  batchNo: '',
 });
 
 const tone = ref<ToneDraft>({ sanNote: '', anNote: '', fanNote: '', nineVirtues: '' });
@@ -77,6 +84,7 @@ function openCreate() {
     defects: ['无'],
     strungAt: new Date().toISOString().slice(0, 10),
     operator: '周砚秋',
+    batchNo: stringBatches.value[0]?.batchNo ?? '',
   };
   tone.value = {
     sanNote: '散音宽厚，一弦如钟。',
@@ -97,6 +105,7 @@ function openEdit(stringing: Stringing) {
     defects: [...stringing.defects],
     strungAt: stringing.strungAt.slice(0, 10),
     operator: stringing.operator,
+    batchNo: stringing.batchNo ?? '',
   };
   tone.value = {
     sanNote: stringing.sanNote,
@@ -118,6 +127,7 @@ async function submit() {
     defects: form.value.defects.length ? form.value.defects : (['无'] as StringDefect[]),
     strungAt: new Date(`${form.value.strungAt}T09:00:00`).toISOString(),
     operator: form.value.operator,
+    batchNo: form.value.batchNo,
     sanNote: tone.value.sanNote,
     anNote: tone.value.anNote,
     fanNote: tone.value.fanNote,
@@ -195,6 +205,12 @@ async function remove(stringing: Stringing) {
         <el-table-column label="上弦日期" width="110">
           <template #default="scope">{{ formatDate(scope.row.strungAt) }}</template>
         </el-table-column>
+        <el-table-column label="琴弦批次" width="110">
+          <template #default="scope">
+            <el-tag v-if="isUnknownBatch(scope.row.batchNo ?? '')" size="small" type="info">来源不明</el-tag>
+            <el-tag v-else size="small" type="warning" effect="plain">{{ batchLabelOf(scope.row.batchNo ?? '') }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="operator" label="上弦人" width="90" />
         <el-table-column label="版本" width="80">
           <template #default="scope">{{ scope.row.noteVersions.length }} 个</template>
@@ -235,6 +251,12 @@ async function remove(stringing: Stringing) {
         <el-form-item label="上弦人" prop="operator">
           <el-input v-model="form.operator" placeholder="如：周砚秋" maxlength="16" style="width: 200px" />
         </el-form-item>
+        <el-form-item label="琴弦批次">
+          <el-select v-model="form.batchNo" placeholder="选择琴弦批次（留空为来源不明）" clearable filterable style="width: 260px">
+            <el-option v-for="batch in stringBatches" :key="batch.id" :label="`${batch.batchNo} · ${batch.supplier}`" :value="batch.batchNo" />
+          </el-select>
+          <router-link to="/traceability" class="batch-link">去台账登记</router-link>
+        </el-form-item>
       </el-form>
 
       <ToneTextEditor v-model="tone" :versions="editingVersions" />
@@ -270,5 +292,9 @@ async function remove(stringing: Stringing) {
 }
 .defect-tag {
   margin-right: 4px;
+}
+.batch-link {
+  margin-left: 10px;
+  font-size: 12px;
 }
 </style>

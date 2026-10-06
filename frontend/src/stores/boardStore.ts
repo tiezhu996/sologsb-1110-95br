@@ -15,6 +15,8 @@ export interface BoardInput {
   grain: WoodGrain;
   defect: WoodDefect;
   receivedAt?: string;
+  /** 木料批次号；留空表示来源不明（旧数据），不视为污染 */
+  batchNo?: string;
   remark?: string;
 }
 
@@ -62,6 +64,7 @@ export const useBoardStore = defineStore('board', {
         grain: input.grain,
         defect: input.defect,
         receivedAt: input.receivedAt ?? new Date().toISOString(),
+        batchNo: input.batchNo?.trim() || undefined,
         remark: input.remark?.trim() || undefined,
       };
       await db.boards.put(toPlain(board));

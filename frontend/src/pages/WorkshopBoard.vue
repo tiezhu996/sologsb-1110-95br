@@ -9,6 +9,7 @@ import { useBoardStore } from '../stores/boardStore';
 import { useChamberStore } from '../stores/chamberStore';
 import { useLacquerStore } from '../stores/lacquerStore';
 import { useStringingStore } from '../stores/stringingStore';
+import { useMaterialStore } from '../stores/materialStore';
 import { formatDate } from '../utils/layer';
 import { WOOD_SPECIES } from '../types/wood-board';
 import type { TimelineEvent } from '../types/ui';
@@ -18,6 +19,7 @@ const boardStore = useBoardStore();
 const chamberStore = useChamberStore();
 const lacquerStore = useLacquerStore();
 const stringingStore = useStringingStore();
+const materialStore = useMaterialStore();
 const { progressList, summary } = useStageProgress();
 
 const stageParam = computed(() => (typeof route.query.stage === 'string' ? route.query.stage : ''));
@@ -41,8 +43,6 @@ const stageBadges = computed(() =>
     count: summary.value.counts[key],
   })),
 );
-
-const pendingString = computed(() => progressList.value.filter((item) => !item.stages.find((s) => s.key === 'string')?.done).length);
 
 const events = computed<TimelineEvent[]>(() => {
   const list: TimelineEvent[] = [];
@@ -93,7 +93,12 @@ const events = computed<TimelineEvent[]>(() => {
         <StatBadge label="平均推进比" :value="summary.averageRatio" unit="%" status="warning" />
       </el-col>
       <el-col :xs="12" :md="6">
-        <StatBadge label="待上弦" :value="pendingString" unit="张" :status="pendingString ? 'danger' : 'success'" />
+        <StatBadge
+          label="待复核暂缓"
+          :value="materialStore.blockedGuqinNos.size"
+          unit="张"
+          :status="materialStore.blockedGuqinNos.size ? 'danger' : 'success'"
+        />
       </el-col>
     </el-row>
 
@@ -156,6 +161,15 @@ const events = computed<TimelineEvent[]>(() => {
         </el-table-column>
         <el-table-column label="累计灰胎(mm)" width="120">
           <template #default="scope">{{ scope.row.cumulativeMm.toFixed(2) }}</template>
+        </el-table-column>
+        <el-table-column label="对账状态" width="150">
+          <template #default="scope">
+            <el-tag v-if="materialStore.pendingCountOf(scope.row.guqinNo)" type="danger" size="small">
+              待复核 {{ materialStore.pendingCountOf(scope.row.guqinNo) }} 条
+            </el-tag>
+            <el-tag v-else-if="materialStore.archivedGuqinNos.has(scope.row.guqinNo)" type="success" size="small">已成琴归档</el-tag>
+            <el-tag v-else type="info" size="small" effect="plain">无冻结 · 可归档</el-tag>
+          </template>
         </el-table-column>
       </el-table>
     </el-card>

@@ -14,6 +14,8 @@ export interface LacquerInput {
   layerThickness: number;
   appliedAt?: string;
   operator: string;
+  /** 生漆批次号；留空表示来源不明（旧数据），不视为污染 */
+  batchNo?: string;
   remark?: string;
 }
 
@@ -64,6 +66,7 @@ export const useLacquerStore = defineStore('lacquer', {
         totalThickness: 0,
         appliedAt: input.appliedAt ?? new Date().toISOString(),
         operator: input.operator.trim(),
+        batchNo: input.batchNo?.trim() || undefined,
         remark: input.remark?.trim() || undefined,
       };
       const next = [...siblings, layer];

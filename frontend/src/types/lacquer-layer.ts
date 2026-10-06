@@ -21,6 +21,8 @@ export interface LacquerLayer {
   appliedAt: string;
   /** 髹漆人 */
   operator: string;
+  /** 生漆批次号（挂材料批次台账）；旧数据缺省为来源不明，不代表污染 */
+  batchNo?: string;
   /** 备注 */
   remark?: string;
 }

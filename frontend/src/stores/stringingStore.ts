@@ -18,6 +18,8 @@ export interface StringingInput {
   operator: string;
   /** 保存时是否记录一条评语历史版本（用于文字版本对照） */
   keepVersion?: boolean;
+  /** 琴弦批次号；留空表示来源不明（旧数据），不视为污染 */
+  batchNo?: string;
 }
 
 interface StringingState {
@@ -71,6 +73,7 @@ export const useStringingStore = defineStore('stringing', {
         defects: input.defects.length ? input.defects : ['无'],
         strungAt: input.strungAt ?? new Date().toISOString(),
         operator: input.operator.trim(),
+        batchNo: input.batchNo?.trim() || undefined,
         noteVersions: [],
       };
       await db.stringings.put(toPlain(stringing));
@@ -114,6 +117,7 @@ export const useStringingStore = defineStore('stringing', {
         defects: patch.defects?.length ? patch.defects : current.defects,
         strungAt: patch.strungAt ?? current.strungAt,
         operator: patch.operator?.trim() ?? current.operator,
+        batchNo: patch.batchNo !== undefined ? patch.batchNo.trim() || undefined : current.batchNo,
         noteVersions: versions,
       };
       await db.stringings.put(toPlain(next));

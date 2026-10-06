@@ -39,6 +39,8 @@ export interface Stringing {
   strungAt: string;
   /** 上弦人 */
   operator: string;
+  /** 琴弦批次号（挂材料批次台账）；旧数据缺省为来源不明，不代表污染 */
+  batchNo?: string;
   /** 历次评语版本（倒序，最新在前） */
   noteVersions: ToneVersion[];
 }

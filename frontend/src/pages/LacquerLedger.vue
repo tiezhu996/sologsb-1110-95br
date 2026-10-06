@@ -6,11 +6,16 @@ import LayerStack from '../components/common/LayerStack.vue';
 import EmptyPanel from '../components/common/EmptyPanel.vue';
 import { useLacquerStore } from '../stores/lacquerStore';
 import { useBoardStore } from '../stores/boardStore';
+import { useMaterialStore } from '../stores/materialStore';
 import { averageThickness, curingInRange, formatDate, layersToTarget, TARGET_TOTAL_MM } from '../utils/layer';
+import { batchLabelOf, isUnknownBatch } from '../utils/material';
 import { MIX_RATIOS, type LacquerLayer } from '../types/lacquer-layer';
 
 const lacquerStore = useLacquerStore();
 const boardStore = useBoardStore();
+const materialStore = useMaterialStore();
+
+const lacquerBatches = computed(() => materialStore.batchesOfType('生漆'));
 
 const guqinOptions = computed(() => Array.from(new Set([...boardStore.guqinNos, ...lacquerStore.guqinNos])).sort());
 const selectedGuqin = ref(guqinOptions.value[0] ?? '');
@@ -37,6 +42,7 @@ interface LacquerForm {
   layerThickness: number;
   appliedAt: string;
   operator: string;
+  batchNo: string;
   remark: string;
 }
 
@@ -49,6 +55,7 @@ const form = ref<LacquerForm>({
   layerThickness: 0.1,
   appliedAt: new Date().toISOString().slice(0, 10),
   operator: '林听雪',
+  batchNo: '',
   remark: '',
 });
 
@@ -68,6 +75,7 @@ function openAppend() {
     layerThickness: 0.1,
     appliedAt: new Date().toISOString().slice(0, 10),
     operator: '林听雪',
+    batchNo: lacquerBatches.value.at(-1)?.batchNo ?? '',
     remark: '',
   };
   dialogVisible.value = true;
@@ -84,6 +92,7 @@ function openEdit(layer: LacquerLayer) {
     layerThickness: layer.layerThickness,
     appliedAt: layer.appliedAt.slice(0, 10),
     operator: layer.operator,
+    batchNo: layer.batchNo ?? '',
     remark: layer.remark ?? '',
   };
   dialogVisible.value = true;
@@ -101,6 +110,7 @@ async function submit() {
     layerThickness: Number(form.value.layerThickness) || 0,
     appliedAt: new Date(`${form.value.appliedAt}T09:00:00`).toISOString(),
     operator: form.value.operator,
+    batchNo: form.value.batchNo,
     remark: form.value.remark,
   };
   if (editingId.value) {
@@ -185,6 +195,12 @@ async function remove(layer: LacquerLayer) {
           <el-table-column label="施工日期" width="110">
             <template #default="scope">{{ formatDate(scope.row.appliedAt) }}</template>
           </el-table-column>
+          <el-table-column label="生漆批次" width="110">
+            <template #default="scope">
+              <el-tag v-if="isUnknownBatch(scope.row.batchNo ?? '')" size="small" type="info">来源不明</el-tag>
+              <el-tag v-else size="small" type="warning" effect="plain">{{ batchLabelOf(scope.row.batchNo ?? '') }}</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column prop="operator" label="髹漆人" width="90" />
           <el-table-column prop="remark" label="备注" min-width="120" />
           <el-table-column label="操作" width="150" fixed="right">
@@ -224,6 +240,12 @@ async function remove(layer: LacquerLayer) {
         </el-form-item>
         <el-form-item label="髹漆人" prop="operator">
           <el-input v-model="form.operator" placeholder="如：林听雪" maxlength="16" style="width: 200px" />
+        </el-form-item>
+        <el-form-item label="生漆批次">
+          <el-select v-model="form.batchNo" placeholder="选择生漆批次（留空为来源不明）" clearable filterable style="width: 260px">
+            <el-option v-for="batch in lacquerBatches" :key="batch.id" :label="`${batch.batchNo} · ${batch.supplier}`" :value="batch.batchNo" />
+          </el-select>
+          <router-link to="/traceability" class="batch-link">去台账登记</router-link>
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.remark" type="textarea" :rows="2" maxlength="60" placeholder="干燥情况等" />
@@ -273,5 +295,9 @@ async function remove(layer: LacquerLayer) {
 .card-note {
   font-size: 12px;
   color: #8a7a68;
+}
+.batch-link {
+  margin-left: 10px;
+  font-size: 12px;
 }
 </style>

@@ -3,22 +3,35 @@ import type { WoodBoard } from '../types/wood-board';
 import type { SoundChamber } from '../types/sound-chamber';
 import type { LacquerLayer } from '../types/lacquer-layer';
 import type { Stringing } from '../types/stringing';
+import type { MaterialBatch } from '../types/material';
 import { cumulativeThickness } from './layer';
 
 const DAY = 86_400_000;
 const daysAgo = (n: number) => new Date(Date.now() - n * DAY).toISOString();
 
-/** 示例琴坯：5 张琴、10 块板材 */
+/** 材料批次台账示例（木料 / 生漆 / 琴弦） */
+export const SEED_BATCHES: MaterialBatch[] = [
+  { id: 'batch-w01', batchNo: 'WD-2410', materialType: '木料', supplier: '兰考桐木材场', receivedAt: daysAgo(130), remark: '桐木批次' },
+  { id: 'batch-w02', batchNo: 'WD-2411', materialType: '木料', supplier: '四川老山林场', receivedAt: daysAgo(120), remark: '川杉与梓木混批' },
+  { id: 'batch-w03', batchNo: 'WD-2501', materialType: '木料', supplier: '散料收购', receivedAt: daysAgo(35), remark: '小批桐木料' },
+  { id: 'batch-l01', batchNo: 'LQ-2502', materialType: '生漆', supplier: '毛坝漆庄', receivedAt: daysAgo(90), remark: '春秋割漆，一等' },
+  { id: 'batch-l02', batchNo: 'LQ-2505', materialType: '生漆', supplier: '恩施漆行', receivedAt: daysAgo(60) },
+  { id: 'batch-l03', batchNo: 'LQ-2508', materialType: '生漆', supplier: '毛坝漆庄', receivedAt: daysAgo(20), remark: '尾批纯生漆' },
+  { id: 'batch-s01', batchNo: 'SX-2503', materialType: '琴弦', supplier: '回丝堂', receivedAt: daysAgo(40), remark: '传统蚕丝弦' },
+  { id: 'batch-s02', batchNo: 'SX-2506', materialType: '琴弦', supplier: '现代钢弦工坊', receivedAt: daysAgo(30), remark: '尼龙缠钢弦' },
+];
+
+/** 示例琴坯：5 张琴、10 块板材。Q-2505 两块板刻意不挂批次，演示旧数据「来源不明」 */
 export const SEED_BOARDS: WoodBoard[] = [
-  { id: 'board-001', boardNo: 'MB-2501', guqinNo: 'Q-2501', part: '面板', species: '桐木', dryYears: 8, thicknessMm: 32, grain: '直纹', defect: '无', receivedAt: daysAgo(120), remark: '河南兰考桐' },
-  { id: 'board-002', boardNo: 'MB-2502', guqinNo: 'Q-2501', part: '底板', species: '梓木', dryYears: 6, thicknessMm: 18, grain: '直纹', defect: '无', receivedAt: daysAgo(118) },
-  { id: 'board-003', boardNo: 'MB-2503', guqinNo: 'Q-2502', part: '面板', species: '杉木', dryYears: 12, thicknessMm: 30, grain: '水波纹', defect: '无', receivedAt: daysAgo(110), remark: '川杉，纹路佳' },
-  { id: 'board-004', boardNo: 'MB-2504', guqinNo: 'Q-2502', part: '底板', species: '梓木', dryYears: 7, thicknessMm: 17, grain: '直纹', defect: '节疤', receivedAt: daysAgo(108) },
-  { id: 'board-005', boardNo: 'MB-2505', guqinNo: 'Q-2503', part: '面板', species: '桐木', dryYears: 5, thicknessMm: 31, grain: '直纹', defect: '无', receivedAt: daysAgo(96) },
-  { id: 'board-006', boardNo: 'MB-2506', guqinNo: 'Q-2503', part: '底板', species: '杉木', dryYears: 5, thicknessMm: 18, grain: '直纹', defect: '无', receivedAt: daysAgo(95) },
-  { id: 'board-007', boardNo: 'MB-2507', guqinNo: 'Q-2504', part: '面板', species: '杉木', dryYears: 15, thicknessMm: 33, grain: '水波纹', defect: '无', receivedAt: daysAgo(80), remark: '老房料' },
-  { id: 'board-008', boardNo: 'MB-2508', guqinNo: 'Q-2504', part: '底板', species: '梓木', dryYears: 9, thicknessMm: 19, grain: '直纹', defect: '无', receivedAt: daysAgo(78) },
-  { id: 'board-009', boardNo: 'MB-2509', guqinNo: 'Q-2505', part: '面板', species: '桐木', dryYears: 2, thicknessMm: 29, grain: '直纹', defect: '裂纹', receivedAt: daysAgo(30), remark: '阴干不足且有裂纹，待退料' },
+  { id: 'board-001', boardNo: 'MB-2501', guqinNo: 'Q-2501', part: '面板', species: '桐木', dryYears: 8, thicknessMm: 32, grain: '直纹', defect: '无', receivedAt: daysAgo(120), batchNo: 'WD-2410', remark: '河南兰考桐' },
+  { id: 'board-002', boardNo: 'MB-2502', guqinNo: 'Q-2501', part: '底板', species: '梓木', dryYears: 6, thicknessMm: 18, grain: '直纹', defect: '无', receivedAt: daysAgo(118), batchNo: 'WD-2411' },
+  { id: 'board-003', boardNo: 'MB-2503', guqinNo: 'Q-2502', part: '面板', species: '杉木', dryYears: 12, thicknessMm: 30, grain: '水波纹', defect: '无', receivedAt: daysAgo(110), batchNo: 'WD-2411', remark: '川杉，纹路佳' },
+  { id: 'board-004', boardNo: 'MB-2504', guqinNo: 'Q-2502', part: '底板', species: '梓木', dryYears: 7, thicknessMm: 17, grain: '直纹', defect: '节疤', receivedAt: daysAgo(108), batchNo: 'WD-2411' },
+  { id: 'board-005', boardNo: 'MB-2505', guqinNo: 'Q-2503', part: '面板', species: '桐木', dryYears: 5, thicknessMm: 31, grain: '直纹', defect: '无', receivedAt: daysAgo(96), batchNo: 'WD-2410' },
+  { id: 'board-006', boardNo: 'MB-2506', guqinNo: 'Q-2503', part: '底板', species: '杉木', dryYears: 5, thicknessMm: 18, grain: '直纹', defect: '无', receivedAt: daysAgo(95), batchNo: 'WD-2411' },
+  { id: 'board-007', boardNo: 'MB-2507', guqinNo: 'Q-2504', part: '面板', species: '杉木', dryYears: 15, thicknessMm: 33, grain: '水波纹', defect: '无', receivedAt: daysAgo(80), batchNo: 'WD-2411', remark: '老房料' },
+  { id: 'board-008', boardNo: 'MB-2508', guqinNo: 'Q-2504', part: '底板', species: '梓木', dryYears: 9, thicknessMm: 19, grain: '直纹', defect: '无', receivedAt: daysAgo(78), batchNo: 'WD-2411' },
+  { id: 'board-009', boardNo: 'MB-2509', guqinNo: 'Q-2505', part: '面板', species: '桐木', dryYears: 2, thicknessMm: 29, grain: '直纹', defect: '裂纹', receivedAt: daysAgo(30), remark: '阴干不足且有裂纹，待退料（旧登记，批次号缺失）' },
   { id: 'board-010', boardNo: 'MB-2510', guqinNo: 'Q-2505', part: '底板', species: '梓木', dryYears: 4, thicknessMm: 17, grain: '直纹', defect: '无', receivedAt: daysAgo(28) },
 ];
 
@@ -30,24 +43,24 @@ export const SEED_CHAMBERS: SoundChamber[] = [
 ];
 
 function buildSeedLayers(): LacquerLayer[] {
-  const plan: Array<[string, string, number, number, number, number, number, string]> = [
-    // guqinNo, mixRatio, temp, humidity, grit, thicknessMm, daysAgo, operator
-    ['Q-2501', '1:1', 24, 78, 240, 0.12, 70, '林听雪'],
-    ['Q-2501', '1:1', 25, 80, 320, 0.1, 58, '林听雪'],
-    ['Q-2501', '1:1.2', 26, 82, 400, 0.09, 40, '林听雪'],
-    ['Q-2502', '1:1', 23, 76, 240, 0.13, 62, '林听雪'],
-    ['Q-2502', '1:1.5', 27, 84, 400, 0.11, 45, '周砚秋'],
-    ['Q-2502', '1:1.5', 25, 80, 600, 0.08, 30, '周砚秋'],
-    ['Q-2503', '1:1.2', 22, 74, 240, 0.12, 48, '林听雪'],
-    ['Q-2503', '1:1.2', 26, 82, 400, 0.1, 33, '林听雪'],
-    ['Q-2504', '1:1', 24, 79, 320, 0.12, 36, '周砚秋'],
-    ['Q-2504', '1:1.5', 28, 85, 600, 0.09, 21, '周砚秋'],
+  const plan: Array<[string, string, number, number, number, number, number, string, string?]> = [
+    // guqinNo, mixRatio, temp, humidity, grit, thicknessMm, daysAgo, operator, 生漆批次（最后一项留空 = 旧数据来源不明）
+    ['Q-2501', '1:1', 24, 78, 240, 0.12, 70, '林听雪', 'LQ-2502'],
+    ['Q-2501', '1:1', 25, 80, 320, 0.1, 58, '林听雪', 'LQ-2502'],
+    ['Q-2501', '1:1.2', 26, 82, 400, 0.09, 40, '林听雪', 'LQ-2502'],
+    ['Q-2502', '1:1', 23, 76, 240, 0.13, 62, '林听雪', 'LQ-2502'],
+    ['Q-2502', '1:1.5', 27, 84, 400, 0.11, 45, '周砚秋', 'LQ-2505'],
+    ['Q-2502', '1:1.5', 25, 80, 600, 0.08, 30, '周砚秋', 'LQ-2505'],
+    ['Q-2503', '1:1.2', 22, 74, 240, 0.12, 48, '林听雪', 'LQ-2505'],
+    ['Q-2503', '1:1.2', 26, 82, 400, 0.1, 33, '林听雪', 'LQ-2505'],
+    ['Q-2504', '1:1', 24, 79, 320, 0.12, 36, '周砚秋', 'LQ-2505'],
+    ['Q-2504', '1:1.5', 28, 85, 600, 0.09, 21, '周砚秋', 'LQ-2508'],
     ['Q-2501', '1:2', 18, 65, 800, 0.05, 18, '林听雪'],
-    ['Q-2502', '纯生漆', 24, 70, 1000, 0.04, 12, '周砚秋'],
+    ['Q-2502', '纯生漆', 24, 70, 1000, 0.04, 12, '周砚秋', 'LQ-2508'],
   ];
 
   const seqMap = new Map<string, number>();
-  return plan.map(([guqinNo, mixRatio, temp, humidity, grit, thickness, days, operator], index) => {
+  return plan.map(([guqinNo, mixRatio, temp, humidity, grit, thickness, days, operator, batchNo], index) => {
     const seq = (seqMap.get(guqinNo) ?? 0) + 1;
     seqMap.set(guqinNo, seq);
     return {
@@ -62,6 +75,7 @@ function buildSeedLayers(): LacquerLayer[] {
       totalThickness: 0,
       appliedAt: daysAgo(days),
       operator,
+      batchNo: batchNo || undefined,
     };
   });
 }
@@ -94,6 +108,7 @@ export const SEED_STRINGINGS: Stringing[] = [
     defects: ['无'],
     strungAt: daysAgo(10),
     operator: '周砚秋',
+    batchNo: 'SX-2503',
     noteVersions: [],
   },
   {
@@ -109,6 +124,7 @@ export const SEED_STRINGINGS: Stringing[] = [
     defects: ['沙音'],
     strungAt: daysAgo(6),
     operator: '林听雪',
+    batchNo: 'SX-2506',
     noteVersions: [],
   },
   {
@@ -124,6 +140,7 @@ export const SEED_STRINGINGS: Stringing[] = [
     defects: ['无'],
     strungAt: daysAgo(3),
     operator: '林听雪',
+    batchNo: 'SX-2503',
     noteVersions: [
       { id: 'tv-001', savedAt: daysAgo(3), sanNote: '散音初上，音色紧。', anNote: '按音略抗指。', fanNote: '泛音偏闷。', nineVirtues: '新弦未开。' },
     ],
@@ -136,19 +153,25 @@ export async function seedIfEmpty(): Promise<void> {
   if (flag) {
     return;
   }
-  const [boardCount, chamberCount, lacquerCount, stringingCount] = await Promise.all([
+  const [boardCount, chamberCount, lacquerCount, stringingCount, batchCount] = await Promise.all([
     db.boards.count(),
     db.chambers.count(),
     db.lacquers.count(),
     db.stringings.count(),
+    db.batches.count(),
   ]);
   const layers = withCumulative(buildSeedLayers());
 
-  await db.transaction('rw', db.boards, db.chambers, db.lacquers, db.stringings, db.meta, async () => {
-    if (boardCount === 0) await db.boards.bulkPut(SEED_BOARDS);
-    if (chamberCount === 0) await db.chambers.bulkPut(SEED_CHAMBERS);
-    if (lacquerCount === 0) await db.lacquers.bulkPut(layers);
-    if (stringingCount === 0) await db.stringings.bulkPut(SEED_STRINGINGS);
-    await db.meta.put({ key: 'seeded', value: new Date().toISOString() });
-  });
+  await db.transaction(
+    'rw',
+    [db.boards, db.chambers, db.lacquers, db.stringings, db.batches, db.notices, db.reviews, db.archives, db.meta],
+    async () => {
+      if (batchCount === 0) await db.batches.bulkPut(SEED_BATCHES);
+      if (boardCount === 0) await db.boards.bulkPut(SEED_BOARDS);
+      if (chamberCount === 0) await db.chambers.bulkPut(SEED_CHAMBERS);
+      if (lacquerCount === 0) await db.lacquers.bulkPut(layers);
+      if (stringingCount === 0) await db.stringings.bulkPut(SEED_STRINGINGS);
+      await db.meta.put({ key: 'seeded', value: new Date().toISOString() });
+    },
+  );
 }

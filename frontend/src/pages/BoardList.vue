@@ -6,9 +6,11 @@ import EmptyPanel from '../components/common/EmptyPanel.vue';
 import DimensionChart from '../components/common/DimensionChart.vue';
 import { useBoardStore } from '../stores/boardStore';
 import { useChamberStore } from '../stores/chamberStore';
+import { useMaterialStore } from '../stores/materialStore';
 import { useGuqinFilter } from '../hooks/useGuqinFilter';
 import { thicknessGap } from '../utils/wood';
 import { formatDate } from '../utils/layer';
+import { batchLabelOf, isUnknownBatch } from '../utils/material';
 import {
   BOARD_PARTS,
   WOOD_DEFECTS,
@@ -23,7 +25,10 @@ import {
 
 const boardStore = useBoardStore();
 const chamberStore = useChamberStore();
+const materialStore = useMaterialStore();
 const filter = useGuqinFilter();
+
+const woodBatches = computed(() => materialStore.batchesOfType('木料'));
 
 const dialogVisible = ref(false);
 const editingId = ref('');
@@ -40,6 +45,7 @@ interface BoardForm {
   grain: WoodGrain;
   defect: WoodDefect;
   receivedAt: string;
+  batchNo: string;
   remark: string;
 }
 
@@ -53,6 +59,7 @@ const form = ref<BoardForm>({
   grain: '直纹',
   defect: '无',
   receivedAt: new Date().toISOString().slice(0, 10),
+  batchNo: '',
   remark: '',
 });
 
@@ -82,6 +89,7 @@ function openCreate() {
     grain: '直纹',
     defect: '无',
     receivedAt: new Date().toISOString().slice(0, 10),
+    batchNo: woodBatches.value[0]?.batchNo ?? '',
     remark: '',
   };
   dialogVisible.value = true;
@@ -99,6 +107,7 @@ function openEdit(board: WoodBoard) {
     grain: board.grain,
     defect: board.defect,
     receivedAt: board.receivedAt.slice(0, 10),
+    batchNo: board.batchNo ?? '',
     remark: board.remark ?? '',
   };
   dialogVisible.value = true;
@@ -117,6 +126,7 @@ async function submit() {
     grain: form.value.grain,
     defect: form.value.defect,
     receivedAt: new Date(`${form.value.receivedAt}T09:00:00`).toISOString(),
+    batchNo: form.value.batchNo,
     remark: form.value.remark,
   };
   if (editingId.value) {
@@ -215,6 +225,12 @@ async function remove(board: WoodBoard) {
           <el-table-column label="入库" width="110">
             <template #default="scope">{{ formatDate(scope.row.receivedAt) }}</template>
           </el-table-column>
+          <el-table-column label="木料批次" width="120">
+            <template #default="scope">
+              <el-tag v-if="isUnknownBatch(scope.row.batchNo ?? '')" size="small" type="info">来源不明</el-tag>
+              <el-tag v-else size="small" type="warning" effect="plain">{{ batchLabelOf(scope.row.batchNo ?? '') }}</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column prop="remark" label="备注" min-width="120" />
           <el-table-column label="操作" width="150" fixed="right">
             <template #default="scope">
@@ -276,6 +292,12 @@ async function remove(board: WoodBoard) {
         <el-form-item label="入库日期">
           <el-date-picker v-model="form.receivedAt" type="date" value-format="YYYY-MM-DD" placeholder="选择日期" />
         </el-form-item>
+        <el-form-item label="木料批次">
+          <el-select v-model="form.batchNo" placeholder="选择木料批次（留空为来源不明）" clearable filterable style="width: 260px">
+            <el-option v-for="batch in woodBatches" :key="batch.id" :label="`${batch.batchNo} · ${batch.supplier}`" :value="batch.batchNo" />
+          </el-select>
+          <router-link to="/traceability" class="batch-link">去台账登记</router-link>
+        </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.remark" type="textarea" :rows="2" maxlength="60" placeholder="产地、纹理等" />
         </el-form-item>
@@ -310,5 +332,9 @@ async function remove(board: WoodBoard) {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+.batch-link {
+  margin-left: 10px;
+  font-size: 12px;
 }
 </style>
