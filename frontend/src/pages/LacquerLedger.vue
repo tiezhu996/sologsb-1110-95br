@@ -1,16 +1,21 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
 import StatBadge from '../components/common/StatBadge.vue';
 import LayerStack from '../components/common/LayerStack.vue';
 import EmptyPanel from '../components/common/EmptyPanel.vue';
 import { useLacquerStore } from '../stores/lacquerStore';
 import { useBoardStore } from '../stores/boardStore';
+import { useMaterialStore } from '../stores/materialStore';
 import { averageThickness, curingInRange, formatDate, layersToTarget, TARGET_TOTAL_MM } from '../utils/layer';
+import { sourceLabel } from '../utils/material';
 import { MIX_RATIOS, type LacquerLayer } from '../types/lacquer-layer';
 
 const lacquerStore = useLacquerStore();
 const boardStore = useBoardStore();
+const materialStore = useMaterialStore();
+const router = useRouter();
 
 const guqinOptions = computed(() => Array.from(new Set([...boardStore.guqinNos, ...lacquerStore.guqinNos])).sort());
 const selectedGuqin = ref(guqinOptions.value[0] ?? '');
@@ -37,6 +42,7 @@ interface LacquerForm {
   layerThickness: number;
   appliedAt: string;
   operator: string;
+  batchNo: string;
   remark: string;
 }
 
@@ -49,6 +55,7 @@ const form = ref<LacquerForm>({
   layerThickness: 0.1,
   appliedAt: new Date().toISOString().slice(0, 10),
   operator: '林听雪',
+  batchNo: '',
   remark: '',
 });
 
@@ -68,6 +75,7 @@ function openAppend() {
     layerThickness: 0.1,
     appliedAt: new Date().toISOString().slice(0, 10),
     operator: '林听雪',
+    batchNo: '',
     remark: '',
   };
   dialogVisible.value = true;
@@ -84,6 +92,7 @@ function openEdit(layer: LacquerLayer) {
     layerThickness: layer.layerThickness,
     appliedAt: layer.appliedAt.slice(0, 10),
     operator: layer.operator,
+    batchNo: layer.batchNo ?? '',
     remark: layer.remark ?? '',
   };
   dialogVisible.value = true;
@@ -101,17 +110,23 @@ async function submit() {
     layerThickness: Number(form.value.layerThickness) || 0,
     appliedAt: new Date(`${form.value.appliedAt}T09:00:00`).toISOString(),
     operator: form.value.operator,
+    batchNo: form.value.batchNo,
     remark: form.value.remark,
   };
-  if (editingId.value) {
-    await lacquerStore.updateLayer(editingId.value, payload);
-    ElMessage.success('已更新该遍记录并重算累计厚度');
-  } else {
-    const created = await lacquerStore.appendLayer(payload);
-    selectedGuqin.value = created.guqinNo;
-    ElMessage.success(`已追加第 ${created.seq} 遍，累计厚度 ${created.totalThickness.toFixed(2)}mm`);
+  try {
+    if (editingId.value) {
+      await lacquerStore.updateLayer(editingId.value, payload);
+      ElMessage.success('已更新该遍记录并重算累计厚度');
+    } else {
+      const created = await lacquerStore.appendLayer(payload);
+      selectedGuqin.value = created.guqinNo;
+      ElMessage.success(`已追加第 ${created.seq} 遍，累计厚度 ${created.totalThickness.toFixed(2)}mm`);
+    }
+    await materialStore.hydrate(); // 未登记批次可能在保存时自动登记
+    dialogVisible.value = false;
+  } catch (e) {
+    ElMessage.error((e as Error).message);
   }
-  dialogVisible.value = false;
 }
 
 async function remove(layer: LacquerLayer) {
@@ -119,8 +134,17 @@ async function remove(layer: LacquerLayer) {
     .then(() => true)
     .catch(() => false);
   if (!confirmed) return;
-  await lacquerStore.removeLayer(layer.id);
-  ElMessage.success('已删除并重算累计厚度');
+  try {
+    await lacquerStore.removeLayer(layer.id);
+    ElMessage.success('已删除并重算累计厚度');
+  } catch (e) {
+    ElMessage.error((e as Error).message);
+  }
+}
+
+/** 跳转到材料对账的复核处理（冻结遍次） */
+function goReview(layer: LacquerLayer) {
+  void router.push({ path: '/materials', query: { tab: 'review', guqin: layer.guqinNo } });
 }
 </script>
 
@@ -186,6 +210,25 @@ async function remove(layer: LacquerLayer) {
             <template #default="scope">{{ formatDate(scope.row.appliedAt) }}</template>
           </el-table-column>
           <el-table-column prop="operator" label="髹漆人" width="90" />
+          <el-table-column label="生漆批次" width="130">
+            <template #default="scope">
+              <el-tag v-if="scope.row.batchNo" size="small" type="info">{{ sourceLabel(scope.row.batchNo) }}</el-tag>
+              <el-tag v-else size="small" type="warning">来源不明</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="质检状态" width="110">
+            <template #default="scope">
+              <el-button
+                v-if="materialStore.pendingReviewOf('lacquer', scope.row.id)"
+                link
+                type="danger"
+                @click="goReview(scope.row)"
+              >
+                待复核冻结
+              </el-button>
+              <el-tag v-else size="small" type="success">正常</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column prop="remark" label="备注" min-width="120" />
           <el-table-column label="操作" width="150" fixed="right">
             <template #default="scope">
@@ -224,6 +267,24 @@ async function remove(layer: LacquerLayer) {
         </el-form-item>
         <el-form-item label="髹漆人" prop="operator">
           <el-input v-model="form.operator" placeholder="如：林听雪" maxlength="16" style="width: 200px" />
+        </el-form-item>
+        <el-form-item label="生漆批次">
+          <el-select
+            v-model="form.batchNo"
+            filterable
+            allow-create
+            default-first-option
+            clearable
+            placeholder="选择或输入批次号；留空为来源不明"
+            style="width: 320px"
+          >
+            <el-option
+              v-for="no in materialStore.batchOptionsOfCategory('lacquer')"
+              :key="no"
+              :label="no"
+              :value="no"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.remark" type="textarea" :rows="2" maxlength="60" placeholder="干燥情况等" />

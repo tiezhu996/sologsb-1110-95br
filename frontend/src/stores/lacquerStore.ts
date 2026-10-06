@@ -3,6 +3,7 @@ import { db } from '../utils/db';
 import { uid } from '../utils/id';
 import { toPlain } from '../utils/plain';
 import { cumulativeThickness, nextSeq, sortLayers } from '../utils/layer';
+import { hasPendingReview, prepareBatch } from '../utils/material';
 import type { LacquerLayer } from '../types/lacquer-layer';
 
 export interface LacquerInput {
@@ -14,6 +15,7 @@ export interface LacquerInput {
   layerThickness: number;
   appliedAt?: string;
   operator: string;
+  batchNo?: string;
   remark?: string;
 }
 
@@ -51,6 +53,7 @@ export const useLacquerStore = defineStore('lacquer', {
 
     /** 追加一遍：遍次自动 +1，并重算该琴累计厚度 */
     async appendLayer(input: LacquerInput): Promise<LacquerLayer> {
+      const batch = await prepareBatch('lacquer', input.batchNo);
       const siblings = this.layers.filter((l) => l.guqinNo === input.guqinNo);
       const layer: LacquerLayer = {
         id: uid('layer'),
@@ -64,6 +67,7 @@ export const useLacquerStore = defineStore('lacquer', {
         totalThickness: 0,
         appliedAt: input.appliedAt ?? new Date().toISOString(),
         operator: input.operator.trim(),
+        batchNo: batch?.batchNo,
         remark: input.remark?.trim() || undefined,
       };
       const next = [...siblings, layer];
@@ -82,7 +86,12 @@ export const useLacquerStore = defineStore('lacquer', {
     async updateLayer(id: string, patch: Partial<LacquerInput>) {
       const current = this.layers.find((l) => l.id === id);
       if (!current) return;
-      const next: LacquerLayer = { ...current, ...patch };
+      const frozen = await hasPendingReview('lacquer', id);
+      if (frozen) {
+        throw new Error(`第 ${current.seq} 遍记录在通知 ${frozen.noticeNo} 待复核中，暂不能改动，请先完成复核`);
+      }
+      const batch = await prepareBatch('lacquer', patch.batchNo ?? current.batchNo);
+      const next: LacquerLayer = { ...current, ...patch, batchNo: batch?.batchNo };
       const siblings = this.layers.filter((l) => l.guqinNo === next.guqinNo).map((l) => (l.id === id ? next : l));
       const withTotals = siblings.map((item) => ({ ...item, totalThickness: cumulativeThickness(siblings, item.seq) }));
       for (const item of withTotals) {
@@ -93,6 +102,10 @@ export const useLacquerStore = defineStore('lacquer', {
 
     async removeLayer(id: string) {
       const current = this.layers.find((l) => l.id === id);
+      const frozen = await hasPendingReview('lacquer', id);
+      if (frozen) {
+        throw new Error(`该遍髹漆记录在通知 ${frozen.noticeNo} 待复核中，暂不能删除，请先完成复核`);
+      }
       await db.lacquers.delete(id);
       const rest = this.layers.filter((l) => l.id !== id);
       if (!current) {

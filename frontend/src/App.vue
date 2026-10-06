@@ -9,18 +9,26 @@ import { useBoardStore } from './stores/boardStore';
 import { useChamberStore } from './stores/chamberStore';
 import { useLacquerStore } from './stores/lacquerStore';
 import { useStringingStore } from './stores/stringingStore';
+import { useMaterialStore } from './stores/materialStore';
 
 const route = useRoute();
 const boardStore = useBoardStore();
 const chamberStore = useChamberStore();
 const lacquerStore = useLacquerStore();
 const stringingStore = useStringingStore();
+const materialStore = useMaterialStore();
 const ready = ref(false);
 
 onMounted(async () => {
   try {
     await seedIfEmpty();
-    await Promise.all([boardStore.hydrate(), chamberStore.hydrate(), lacquerStore.hydrate(), stringingStore.hydrate()]);
+    await Promise.all([
+      boardStore.hydrate(),
+      chamberStore.hydrate(),
+      lacquerStore.hydrate(),
+      stringingStore.hydrate(),
+      materialStore.hydrate(),
+    ]);
   } catch (error) {
     ElMessage.error(`本地数据装载失败：${(error as Error).message}`);
   } finally {
@@ -48,6 +56,10 @@ async function handleExport() {
         <el-menu-item index="/chambers">槽腹尺寸</el-menu-item>
         <el-menu-item index="/lacquer">灰胎髹漆</el-menu-item>
         <el-menu-item index="/stringing">上弦评价</el-menu-item>
+        <el-menu-item index="/materials">
+          材料对账
+          <el-badge v-if="materialStore.pendingCount" :value="materialStore.pendingCount" class="menu-badge" type="danger" />
+        </el-menu-item>
       </el-menu>
     </el-aside>
     <el-container>
@@ -84,6 +96,9 @@ async function handleExport() {
 }
 .app-menu {
   border-right: none;
+}
+.menu-badge {
+  margin-left: 8px;
 }
 .app-header {
   background: #fff;

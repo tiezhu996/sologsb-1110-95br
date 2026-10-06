@@ -31,6 +31,8 @@ export interface WoodBoard {
   defect: WoodDefect;
   /** 入库时间 ISO */
   receivedAt: string;
+  /** 木料批次号（挂供料商批次）；旧数据缺省为来源不明，不当作污染 */
+  batchNo?: string;
   /** 备注 */
   remark?: string;
 }

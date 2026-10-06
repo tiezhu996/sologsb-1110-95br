@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import StatBadge from '../components/common/StatBadge.vue';
 import ProcessTimeline from '../components/common/ProcessTimeline.vue';
 import FilterBar from '../components/common/FilterBar.vue';
@@ -9,16 +9,46 @@ import { useBoardStore } from '../stores/boardStore';
 import { useChamberStore } from '../stores/chamberStore';
 import { useLacquerStore } from '../stores/lacquerStore';
 import { useStringingStore } from '../stores/stringingStore';
+import { useMaterialStore } from '../stores/materialStore';
+import { archiveStateOf, ARCHIVE_STATE_LABELS, ARCHIVE_STATE_TAG_TYPE } from '../utils/material';
 import { formatDate } from '../utils/layer';
 import { WOOD_SPECIES } from '../types/wood-board';
 import type { TimelineEvent } from '../types/ui';
 
 const route = useRoute();
+const router = useRouter();
 const boardStore = useBoardStore();
 const chamberStore = useChamberStore();
 const lacquerStore = useLacquerStore();
 const stringingStore = useStringingStore();
+const materialStore = useMaterialStore();
 const { progressList, summary } = useStageProgress();
+
+/** 每张琴的成琴归档状态（有待复核 → 暂缓归档，且不牵连其它琴） */
+const stateOfGuqin = computed(() => {
+  const map = new Map<string, ReturnType<typeof archiveStateOf>>();
+  progressList.value.forEach((p) => {
+    map.set(
+      p.guqinNo,
+      archiveStateOf(p.guqinNo, {
+        boards: boardStore.boards,
+        layers: lacquerStore.layers,
+        stringings: stringingStore.stringings,
+        hasChamber: Boolean(chamberStore.byGuqin(p.guqinNo)),
+        pendingReviews: materialStore.reviews,
+        archive: materialStore.archiveOf(p.guqinNo),
+      }),
+    );
+  });
+  return map;
+});
+
+const heldCount = computed(() => Array.from(stateOfGuqin.value.values()).filter((s) => s === 'held').length);
+
+function goMaterials(guqinNo: string) {
+  void router.push({ path: '/materials', query: { tab: 'review', guqin: guqinNo } });
+}
+
 
 const stageParam = computed(() => (typeof route.query.stage === 'string' ? route.query.stage : ''));
 const speciesParam = computed(() => (typeof route.query.species === 'string' ? route.query.species : ''));
@@ -97,6 +127,18 @@ const events = computed<TimelineEvent[]>(() => {
       </el-col>
     </el-row>
 
+    <el-alert
+      v-if="heldCount"
+      class="held-alert"
+      type="error"
+      show-icon
+      :closable="false"
+      title="有待复核记录的琴已暂缓成琴归档"
+    >
+      共 {{ heldCount }} 张琴命中停用批次，仅这些琴与其实际使用的工序受牵连；没碰过该批次的琴和遍次可正常推进。
+      <el-button link type="primary" @click="router.push('/materials?tab=review')">去复核处理</el-button>
+    </el-alert>
+
     <el-card shadow="never" class="block">
       <template #header>
         <div class="card-head">
@@ -157,6 +199,21 @@ const events = computed<TimelineEvent[]>(() => {
         <el-table-column label="累计灰胎(mm)" width="120">
           <template #default="scope">{{ scope.row.cumulativeMm.toFixed(2) }}</template>
         </el-table-column>
+        <el-table-column label="成琴归档" width="130">
+          <template #default="scope">
+            <el-tag :type="ARCHIVE_STATE_TAG_TYPE[stateOfGuqin.get(scope.row.guqinNo) ?? 'not_ready']" size="small">
+              {{ ARCHIVE_STATE_LABELS[stateOfGuqin.get(scope.row.guqinNo) ?? 'not_ready'] }}
+            </el-tag>
+            <el-button
+              v-if="stateOfGuqin.get(scope.row.guqinNo) === 'held'"
+              link
+              type="danger"
+              @click="goMaterials(scope.row.guqinNo)"
+            >
+              去复核
+            </el-button>
+          </template>
+        </el-table-column>
       </el-table>
     </el-card>
 
@@ -199,6 +256,9 @@ const events = computed<TimelineEvent[]>(() => {
 }
 .stage-tag {
   margin-right: 6px;
+}
+.held-alert {
+  margin-bottom: 14px;
 }
 .missing {
   color: #c62828;

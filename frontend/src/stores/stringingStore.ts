@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { db } from '../utils/db';
 import { uid } from '../utils/id';
 import { toPlain } from '../utils/plain';
+import { hasPendingReview, prepareBatch } from '../utils/material';
 import type { StringDefect, StringType, Stringing, ToneVersion } from '../types/stringing';
 
 export interface StringingInput {
@@ -16,6 +17,7 @@ export interface StringingInput {
   defects: StringDefect[];
   strungAt?: string;
   operator: string;
+  batchNo?: string;
   /** 保存时是否记录一条评语历史版本（用于文字版本对照） */
   keepVersion?: boolean;
 }
@@ -58,6 +60,7 @@ export const useStringingStore = defineStore('stringing', {
     },
 
     async addStringing(input: StringingInput): Promise<Stringing> {
+      const batch = await prepareBatch('string', input.batchNo);
       const stringing: Stringing = {
         id: uid('stringing'),
         guqinNo: input.guqinNo.trim(),
@@ -71,6 +74,7 @@ export const useStringingStore = defineStore('stringing', {
         defects: input.defects.length ? input.defects : ['无'],
         strungAt: input.strungAt ?? new Date().toISOString(),
         operator: input.operator.trim(),
+        batchNo: batch?.batchNo,
         noteVersions: [],
       };
       await db.stringings.put(toPlain(stringing));
@@ -82,6 +86,11 @@ export const useStringingStore = defineStore('stringing', {
     async updateStringing(id: string, patch: Partial<StringingInput>) {
       const current = this.stringings.find((s) => s.id === id);
       if (!current) return;
+      const frozen = await hasPendingReview('string', id);
+      if (frozen) {
+        throw new Error(`该上弦记录在通知 ${frozen.noticeNo} 待复核中，暂不能改动，请先完成复核`);
+      }
+      const batch = await prepareBatch('string', patch.batchNo ?? current.batchNo);
       const notesChanged =
         (patch.sanNote !== undefined && patch.sanNote.trim() !== current.sanNote) ||
         (patch.anNote !== undefined && patch.anNote.trim() !== current.anNote) ||
@@ -114,6 +123,7 @@ export const useStringingStore = defineStore('stringing', {
         defects: patch.defects?.length ? patch.defects : current.defects,
         strungAt: patch.strungAt ?? current.strungAt,
         operator: patch.operator?.trim() ?? current.operator,
+        batchNo: batch?.batchNo,
         noteVersions: versions,
       };
       await db.stringings.put(toPlain(next));
@@ -121,6 +131,10 @@ export const useStringingStore = defineStore('stringing', {
     },
 
     async removeStringing(id: string) {
+      const frozen = await hasPendingReview('string', id);
+      if (frozen) {
+        throw new Error(`该上弦记录在通知 ${frozen.noticeNo} 待复核中，暂不能删除，请先完成复核`);
+      }
       await db.stringings.delete(id);
       this.stringings = this.stringings.filter((s) => s.id !== id);
     },

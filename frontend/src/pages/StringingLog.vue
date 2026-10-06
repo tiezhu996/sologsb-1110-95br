@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
 import FilterBar from '../components/common/FilterBar.vue';
 import EmptyPanel from '../components/common/EmptyPanel.vue';
 import ToneTextEditor from '../components/common/ToneTextEditor.vue';
 import { useStringingStore } from '../stores/stringingStore';
 import { useBoardStore } from '../stores/boardStore';
+import { useMaterialStore } from '../stores/materialStore';
 import { formatDate } from '../utils/layer';
+import { sourceLabel } from '../utils/material';
 import {
   NINE_VIRTUES,
   STRING_DEFECTS,
@@ -19,8 +21,10 @@ import {
 } from '../types/stringing';
 
 const route = useRoute();
+const router = useRouter();
 const stringingStore = useStringingStore();
 const boardStore = useBoardStore();
+const materialStore = useMaterialStore();
 
 const dialogVisible = ref(false);
 const editingId = ref('');
@@ -34,6 +38,7 @@ interface StringingForm {
   defects: StringDefect[];
   strungAt: string;
   operator: string;
+  batchNo: string;
 }
 
 const form = ref<StringingForm>({
@@ -44,6 +49,7 @@ const form = ref<StringingForm>({
   defects: ['无'],
   strungAt: new Date().toISOString().slice(0, 10),
   operator: '周砚秋',
+  batchNo: '',
 });
 
 const tone = ref<ToneDraft>({ sanNote: '', anNote: '', fanNote: '', nineVirtues: '' });
@@ -77,6 +83,7 @@ function openCreate() {
     defects: ['无'],
     strungAt: new Date().toISOString().slice(0, 10),
     operator: '周砚秋',
+    batchNo: '',
   };
   tone.value = {
     sanNote: '散音宽厚，一弦如钟。',
@@ -97,6 +104,7 @@ function openEdit(stringing: Stringing) {
     defects: [...stringing.defects],
     strungAt: stringing.strungAt.slice(0, 10),
     operator: stringing.operator,
+    batchNo: stringing.batchNo ?? '',
   };
   tone.value = {
     sanNote: stringing.sanNote,
@@ -118,20 +126,26 @@ async function submit() {
     defects: form.value.defects.length ? form.value.defects : (['无'] as StringDefect[]),
     strungAt: new Date(`${form.value.strungAt}T09:00:00`).toISOString(),
     operator: form.value.operator,
+    batchNo: form.value.batchNo,
     sanNote: tone.value.sanNote,
     anNote: tone.value.anNote,
     fanNote: tone.value.fanNote,
     nineVirtues: tone.value.nineVirtues,
     keepVersion: true,
   };
-  if (editingId.value) {
-    await stringingStore.updateStringing(editingId.value, payload);
-    ElMessage.success('已保存评语，改动前的文字已存入版本对照');
-  } else {
-    await stringingStore.addStringing(payload);
-    ElMessage.success(`已登记 ${payload.guqinNo} 的上弦与音色评语`);
+  try {
+    if (editingId.value) {
+      await stringingStore.updateStringing(editingId.value, payload);
+      ElMessage.success('已保存评语，改动前的文字已存入版本对照');
+    } else {
+      await stringingStore.addStringing(payload);
+      ElMessage.success(`已登记 ${payload.guqinNo} 的上弦与音色评语`);
+    }
+    await materialStore.hydrate(); // 未登记批次可能在保存时自动登记
+    dialogVisible.value = false;
+  } catch (e) {
+    ElMessage.error((e as Error).message);
   }
-  dialogVisible.value = false;
 }
 
 async function remove(stringing: Stringing) {
@@ -139,8 +153,17 @@ async function remove(stringing: Stringing) {
     .then(() => true)
     .catch(() => false);
   if (!confirmed) return;
-  await stringingStore.removeStringing(stringing.id);
-  ElMessage.success('已删除');
+  try {
+    await stringingStore.removeStringing(stringing.id);
+    ElMessage.success('已删除');
+  } catch (e) {
+    ElMessage.error((e as Error).message);
+  }
+}
+
+/** 跳转到材料对账的复核处理（冻结上弦记录） */
+function goReview(stringing: Stringing) {
+  void router.push({ path: '/materials', query: { tab: 'review', guqin: stringing.guqinNo } });
 }
 </script>
 
@@ -196,6 +219,25 @@ async function remove(stringing: Stringing) {
           <template #default="scope">{{ formatDate(scope.row.strungAt) }}</template>
         </el-table-column>
         <el-table-column prop="operator" label="上弦人" width="90" />
+        <el-table-column label="琴弦批次" width="130">
+          <template #default="scope">
+            <el-tag v-if="scope.row.batchNo" size="small" type="info">{{ sourceLabel(scope.row.batchNo) }}</el-tag>
+            <el-tag v-else size="small" type="warning">来源不明</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="质检状态" width="110">
+          <template #default="scope">
+            <el-button
+              v-if="materialStore.pendingReviewOf('string', scope.row.id)"
+              link
+              type="danger"
+              @click="goReview(scope.row)"
+            >
+              待复核冻结
+            </el-button>
+            <el-tag v-else size="small" type="success">正常</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="版本" width="80">
           <template #default="scope">{{ scope.row.noteVersions.length }} 个</template>
         </el-table-column>
@@ -234,6 +276,24 @@ async function remove(stringing: Stringing) {
         </el-form-item>
         <el-form-item label="上弦人" prop="operator">
           <el-input v-model="form.operator" placeholder="如：周砚秋" maxlength="16" style="width: 200px" />
+        </el-form-item>
+        <el-form-item label="琴弦批次">
+          <el-select
+            v-model="form.batchNo"
+            filterable
+            allow-create
+            default-first-option
+            clearable
+            placeholder="选择或输入批次号；留空为来源不明"
+            style="width: 320px"
+          >
+            <el-option
+              v-for="no in materialStore.batchOptionsOfCategory('string')"
+              :key="no"
+              :label="no"
+              :value="no"
+            />
+          </el-select>
         </el-form-item>
       </el-form>
 

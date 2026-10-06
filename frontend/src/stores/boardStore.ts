@@ -3,6 +3,7 @@ import { db } from '../utils/db';
 import { uid } from '../utils/id';
 import { toPlain } from '../utils/plain';
 import { pairBoards, boardUsable } from '../utils/wood';
+import { hasPendingReview, prepareBatch } from '../utils/material';
 import type { BoardPart, BoardPair, WoodBoard, WoodDefect, WoodGrain, WoodSpecies } from '../types/wood-board';
 
 export interface BoardInput {
@@ -15,6 +16,7 @@ export interface BoardInput {
   grain: WoodGrain;
   defect: WoodDefect;
   receivedAt?: string;
+  batchNo?: string;
   remark?: string;
 }
 
@@ -51,6 +53,7 @@ export const useBoardStore = defineStore('board', {
     },
 
     async addBoard(input: BoardInput): Promise<WoodBoard> {
+      const batch = await prepareBatch('wood', input.batchNo);
       const board: WoodBoard = {
         id: uid('board'),
         boardNo: input.boardNo.trim(),
@@ -62,6 +65,7 @@ export const useBoardStore = defineStore('board', {
         grain: input.grain,
         defect: input.defect,
         receivedAt: input.receivedAt ?? new Date().toISOString(),
+        batchNo: batch?.batchNo,
         remark: input.remark?.trim() || undefined,
       };
       await db.boards.put(toPlain(board));
@@ -72,12 +76,25 @@ export const useBoardStore = defineStore('board', {
     async updateBoard(id: string, patch: Partial<BoardInput>) {
       const current = this.boards.find((b) => b.id === id);
       if (!current) return;
-      const next: WoodBoard = { ...current, ...patch };
+      const frozen = await hasPendingReview('wood', id);
+      if (frozen) {
+        throw new Error(`该板材记录在通知 ${frozen.noticeNo} 待复核中，暂不能改动，请先完成复核`);
+      }
+      const batch = await prepareBatch('wood', patch.batchNo ?? current.batchNo);
+      const next: WoodBoard = {
+        ...current,
+        ...patch,
+        batchNo: batch?.batchNo,
+      };
       await db.boards.put(toPlain(next));
       this.boards = this.boards.map((b) => (b.id === id ? next : b));
     },
 
     async removeBoard(id: string) {
+      const frozen = await hasPendingReview('wood', id);
+      if (frozen) {
+        throw new Error(`该板材记录在通知 ${frozen.noticeNo} 待复核中，暂不能删除，请先完成复核`);
+      }
       await db.boards.delete(id);
       this.boards = this.boards.filter((b) => b.id !== id);
     },
